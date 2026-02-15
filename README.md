@@ -85,3 +85,21 @@ Create a test database `integration_layer_test` for `php artisan test`.
 - Exceed attempts -> moves to DLQ (DEAD)
 - Replay from DLQ -> processes to PROCESSED
 - Outbox send failure -> retries then SENT
+
+## Observability
+
+Structured logs (JSON-like context):
+- `webhook.received` (provider, topic, correlation_id, inbox_event_id)
+- `webhook.invalid_signature` (provider, topic, correlation_id)
+- `inbox.processed` (provider, topic, correlation_id, inbox_event_id)
+- `outbox.sent` (type, correlation_id, outbox_message_id)
+
+Metrics logged via `metric` entries:
+- `inbox_received_total`
+- `inbox_processed_total`
+- `inbox_failed_total`
+- `inbox_dead_total`
+- `outbox_pending_total`
+- `outbox_sent_total`
+- `outbox_failed_total`
+- `outbox_dead_total`

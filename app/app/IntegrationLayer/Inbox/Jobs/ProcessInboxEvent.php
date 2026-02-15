@@ -6,6 +6,7 @@ use App\IntegrationLayer\Handlers\HandlerRouter;
 use App\IntegrationLayer\Inbox\Models\InboxEvent;
 use App\IntegrationLayer\Outbox\Jobs\PublishOutboxMessage;
 use App\IntegrationLayer\Outbox\Models\OutboxMessage;
+use App\IntegrationLayer\Ops\Metrics\MetricsLogger;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -38,7 +39,7 @@ class ProcessInboxEvent implements ShouldQueue
         return now()->addHours(6);
     }
 
-    public function handle(HandlerRouter $router): void
+    public function handle(HandlerRouter $router, MetricsLogger $metrics): void
     {
         $event = InboxEvent::query()->find($this->inboxEventId);
 
@@ -60,7 +61,7 @@ class ProcessInboxEvent implements ShouldQueue
         $event->refresh();
 
         try {
-            DB::transaction(function () use ($event, $router) {
+            DB::transaction(function () use ($event, $router, $metrics) {
                 $router->resolve($event)->handle($event);
 
                 $outbox = OutboxMessage::query()->create([
@@ -77,6 +78,21 @@ class ProcessInboxEvent implements ShouldQueue
                 ])->save();
 
                 PublishOutboxMessage::dispatch($outbox->id);
+
+                $metrics->increment('inbox_processed_total', 1, [
+                    'provider' => $event->provider,
+                    'topic' => $event->topic,
+                ]);
+                $metrics->increment('outbox_pending_total', 1, [
+                    'type' => $outbox->type,
+                ]);
+
+                Log::info('inbox.processed', [
+                    'inbox_event_id' => $event->id,
+                    'provider' => $event->provider,
+                    'topic' => $event->topic,
+                    'correlation_id' => $event->correlation_id,
+                ]);
             });
         } catch (\Throwable $exception) {
             $attempts = $event->attempts + 1;
@@ -95,6 +111,11 @@ class ProcessInboxEvent implements ShouldQueue
                     'status' => InboxEvent::STATUS_DEAD,
                 ])->save();
 
+                $metrics->increment('inbox_dead_total', 1, [
+                    'provider' => $event->provider,
+                    'topic' => $event->topic,
+                ]);
+
                 Log::warning('Inbox event moved to DLQ', [
                     'inbox_event_id' => $event->id,
                     'provider' => $event->provider,
@@ -104,6 +125,11 @@ class ProcessInboxEvent implements ShouldQueue
 
                 return;
             }
+
+            $metrics->increment('inbox_failed_total', 1, [
+                'provider' => $event->provider,
+                'topic' => $event->topic,
+            ]);
 
             Log::warning('Inbox event processing failed', [
                 'inbox_event_id' => $event->id,

@@ -4,6 +4,7 @@ namespace App\IntegrationLayer\Outbox\Jobs;
 
 use App\IntegrationLayer\Outbox\Models\OutboxMessage;
 use App\IntegrationLayer\Outbox\Publishers\PublisherRouter;
+use App\IntegrationLayer\Ops\Metrics\MetricsLogger;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -25,7 +26,7 @@ class PublishOutboxMessage implements ShouldQueue
         $this->onQueue('outbox-publish');
     }
 
-    public function handle(PublisherRouter $router): void
+    public function handle(PublisherRouter $router, MetricsLogger $metrics): void
     {
         $message = OutboxMessage::query()->find($this->outboxMessageId);
 
@@ -53,6 +54,16 @@ class PublishOutboxMessage implements ShouldQueue
                 'status' => OutboxMessage::STATUS_SENT,
                 'sent_at' => now(),
             ])->save();
+
+            $metrics->increment('outbox_sent_total', 1, [
+                'type' => $message->type,
+            ]);
+
+            Log::info('outbox.sent', [
+                'outbox_message_id' => $message->id,
+                'type' => $message->type,
+                'correlation_id' => $message->correlation_id,
+            ]);
         } catch (\Throwable $exception) {
             $attempts = $message->attempts + 1;
             $shouldDeadLetter = $attempts >= $this->tries;
@@ -69,6 +80,10 @@ class PublishOutboxMessage implements ShouldQueue
                     'status' => OutboxMessage::STATUS_DEAD,
                 ])->save();
 
+                $metrics->increment('outbox_dead_total', 1, [
+                    'type' => $message->type,
+                ]);
+
                 Log::warning('Outbox message moved to DLQ', [
                     'outbox_message_id' => $message->id,
                     'type' => $message->type,
@@ -77,6 +92,10 @@ class PublishOutboxMessage implements ShouldQueue
 
                 return;
             }
+
+            $metrics->increment('outbox_failed_total', 1, [
+                'type' => $message->type,
+            ]);
 
             Log::warning('Outbox message publish failed', [
                 'outbox_message_id' => $message->id,

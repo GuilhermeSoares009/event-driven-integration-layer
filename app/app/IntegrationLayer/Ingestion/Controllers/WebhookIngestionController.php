@@ -6,16 +6,19 @@ use App\IntegrationLayer\Ingestion\Normalizers\PayloadNormalizer;
 use App\IntegrationLayer\Ingestion\Validators\SignatureValidatorInterface;
 use App\IntegrationLayer\Inbox\Jobs\ProcessInboxEvent;
 use App\IntegrationLayer\Inbox\Models\InboxEvent;
+use App\IntegrationLayer\Ops\Metrics\MetricsLogger;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 class WebhookIngestionController
 {
     public function __construct(
         private SignatureValidatorInterface $validator,
-        private PayloadNormalizer $normalizer
+        private PayloadNormalizer $normalizer,
+        private MetricsLogger $metrics
     ) {
     }
 
@@ -25,6 +28,11 @@ class WebhookIngestionController
         $signature = $request->header('X-Signature');
 
         if (!$this->validator->isValid($provider, $payloadRaw, $signature)) {
+            Log::warning('webhook.invalid_signature', [
+                'provider' => $provider,
+                'topic' => $topic,
+                'correlation_id' => $request->header('X-Correlation-Id'),
+            ]);
             return response()->json(['error' => 'invalid_signature'], 401);
         }
 
@@ -40,6 +48,11 @@ class WebhookIngestionController
         $correlationId = $request->header('X-Correlation-Id') ?? (string) Str::uuid();
 
         if ($this->isDuplicate($provider, $externalEventId, $payloadHash)) {
+            $this->metrics->increment('inbox_received_total', 1, [
+                'deduped' => true,
+                'provider' => $provider,
+                'topic' => $topic,
+            ]);
             return response()->json([
                 'status' => 'accepted',
                 'deduped' => true,
@@ -60,6 +73,11 @@ class WebhookIngestionController
             ]);
         } catch (QueryException $exception) {
             if ($this->isUniqueViolation($exception)) {
+                $this->metrics->increment('inbox_received_total', 1, [
+                    'deduped' => true,
+                    'provider' => $provider,
+                    'topic' => $topic,
+                ]);
                 return response()->json([
                     'status' => 'accepted',
                     'deduped' => true,
@@ -71,6 +89,19 @@ class WebhookIngestionController
         }
 
         ProcessInboxEvent::dispatch($event->id);
+
+        $this->metrics->increment('inbox_received_total', 1, [
+            'deduped' => false,
+            'provider' => $provider,
+            'topic' => $topic,
+        ]);
+
+        Log::info('webhook.received', [
+            'inbox_event_id' => $event->id,
+            'provider' => $provider,
+            'topic' => $topic,
+            'correlation_id' => $correlationId,
+        ]);
 
         return response()->json([
             'status' => 'accepted',
