@@ -4,12 +4,15 @@ namespace App\IntegrationLayer\Inbox\Jobs;
 
 use App\IntegrationLayer\Handlers\HandlerRouter;
 use App\IntegrationLayer\Inbox\Models\InboxEvent;
+use App\IntegrationLayer\Outbox\Jobs\PublishOutboxMessage;
+use App\IntegrationLayer\Outbox\Models\OutboxMessage;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class ProcessInboxEvent implements ShouldQueue
 {
@@ -57,12 +60,24 @@ class ProcessInboxEvent implements ShouldQueue
         $event->refresh();
 
         try {
-            $router->resolve($event)->handle($event);
+            DB::transaction(function () use ($event, $router) {
+                $router->resolve($event)->handle($event);
 
-            $event->forceFill([
-                'status' => InboxEvent::STATUS_PROCESSED,
-                'processed_at' => now(),
-            ])->save();
+                $outbox = OutboxMessage::query()->create([
+                    'type' => $event->topic,
+                    'payload_json' => $event->payload_json,
+                    'status' => OutboxMessage::STATUS_PENDING,
+                    'attempts' => 0,
+                    'correlation_id' => $event->correlation_id,
+                ]);
+
+                $event->forceFill([
+                    'status' => InboxEvent::STATUS_PROCESSED,
+                    'processed_at' => now(),
+                ])->save();
+
+                PublishOutboxMessage::dispatch($outbox->id);
+            });
         } catch (\Throwable $exception) {
             $attempts = $event->attempts + 1;
             $shouldDeadLetter = $attempts >= $this->tries;

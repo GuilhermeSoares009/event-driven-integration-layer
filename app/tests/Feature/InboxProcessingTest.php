@@ -6,6 +6,7 @@ use App\IntegrationLayer\Inbox\Jobs\ProcessInboxEvent;
 use App\IntegrationLayer\Inbox\Models\InboxEvent;
 use App\IntegrationLayer\Handlers\HandlerInterface;
 use App\IntegrationLayer\Handlers\HandlerRouter;
+use App\IntegrationLayer\Outbox\Models\OutboxMessage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -47,6 +48,7 @@ class InboxProcessingTest extends TestCase
 
         $this->assertSame(InboxEvent::STATUS_PROCESSED, $event->status);
         $this->assertNotNull($event->processed_at);
+        $this->assertDatabaseCount('outbox_messages', 1);
     }
 
     public function test_it_marks_event_as_dead_after_max_attempts(): void
