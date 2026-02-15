@@ -1,5 +1,6 @@
 <?php
 
+use App\IntegrationLayer\Ops\Controllers\InboxDashboardController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -16,3 +17,6 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/inbox', [InboxDashboardController::class, 'index']);
+Route::get('/inbox/{id}', [InboxDashboardController::class, 'show']);
