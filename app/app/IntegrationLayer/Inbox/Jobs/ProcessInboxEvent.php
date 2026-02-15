@@ -23,6 +23,18 @@ class ProcessInboxEvent implements ShouldQueue
         $this->onQueue('inbox-processing');
     }
 
+    public int $tries = 5;
+
+    public function backoff(): array
+    {
+        return [30, 120, 300, 900, 1800];
+    }
+
+    public function retryUntil(): \DateTimeInterface
+    {
+        return now()->addHours(6);
+    }
+
     public function handle(HandlerRouter $router): void
     {
         $event = InboxEvent::query()->find($this->inboxEventId);
@@ -52,12 +64,31 @@ class ProcessInboxEvent implements ShouldQueue
                 'processed_at' => now(),
             ])->save();
         } catch (\Throwable $exception) {
+            $attempts = $event->attempts + 1;
+            $shouldDeadLetter = $attempts >= $this->tries;
+
             $event->forceFill([
                 'status' => InboxEvent::STATUS_FAILED,
-                'attempts' => $event->attempts + 1,
+                'attempts' => $attempts,
                 'last_error_code' => get_class($exception),
                 'last_error_message' => $exception->getMessage(),
+                'next_retry_at' => $shouldDeadLetter ? null : now()->addSeconds($this->nextRetryDelay($attempts)),
             ])->save();
+
+            if ($shouldDeadLetter) {
+                $event->forceFill([
+                    'status' => InboxEvent::STATUS_DEAD,
+                ])->save();
+
+                Log::warning('Inbox event moved to DLQ', [
+                    'inbox_event_id' => $event->id,
+                    'provider' => $event->provider,
+                    'topic' => $event->topic,
+                    'correlation_id' => $event->correlation_id,
+                ]);
+
+                return;
+            }
 
             Log::warning('Inbox event processing failed', [
                 'inbox_event_id' => $event->id,
@@ -69,5 +100,16 @@ class ProcessInboxEvent implements ShouldQueue
 
             throw $exception;
         }
+    }
+
+    private function nextRetryDelay(int $attempt): int
+    {
+        $delays = $this->backoff();
+        $index = min($attempt - 1, count($delays) - 1);
+        $base = $delays[$index];
+
+        $jitter = random_int(0, (int) round($base * 0.2));
+
+        return $base + $jitter;
     }
 }
