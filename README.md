@@ -122,3 +122,7 @@ Use the prune commands to delete old records:
 - `php artisan outbox:prune --days=30`
 
 Defaults are in `app/config/integration-layer.php` under `retention`.
+
+## ADRs
+
+Architecture decisions live in `docs/adr/`.
