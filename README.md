@@ -103,3 +103,13 @@ Metrics logged via `metric` entries:
 - `outbox_sent_total`
 - `outbox_failed_total`
 - `outbox_dead_total`
+- `webhook_rate_limited_total`
+
+## Rate Limiting
+
+Rate limiting is applied per provider and IP.
+
+Configure limits in `app/config/integration-layer.php`:
+
+- `rate_limits.default_per_minute`
+- `rate_limits.<provider>`

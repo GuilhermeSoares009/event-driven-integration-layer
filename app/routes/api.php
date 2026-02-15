@@ -1,6 +1,7 @@
 <?php
 
 use App\IntegrationLayer\Ingestion\Controllers\WebhookIngestionController;
+use App\IntegrationLayer\Ingestion\Middleware\ProviderRateLimit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -19,4 +20,5 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-Route::post('/webhooks/{provider}/{topic}', [WebhookIngestionController::class, 'ingest']);
+Route::post('/webhooks/{provider}/{topic}', [WebhookIngestionController::class, 'ingest'])
+    ->middleware(ProviderRateLimit::class);
