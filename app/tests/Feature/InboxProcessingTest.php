@@ -81,7 +81,8 @@ class InboxProcessingTest extends TestCase
         $job = new ProcessInboxEvent($event->id);
         $job->handle(
             $this->app->make(HandlerRouter::class),
-            $this->app->make(\App\IntegrationLayer\Ops\Metrics\MetricsLogger::class)
+            $this->app->make(\App\IntegrationLayer\Ops\Metrics\MetricsLogger::class),
+            $this->app->make(\App\IntegrationLayer\Ops\Tracing\TraceLogger::class)
         );
 
         $event->refresh();

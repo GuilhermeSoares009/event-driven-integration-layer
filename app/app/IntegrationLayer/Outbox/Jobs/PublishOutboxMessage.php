@@ -5,6 +5,7 @@ namespace App\IntegrationLayer\Outbox\Jobs;
 use App\IntegrationLayer\Outbox\Models\OutboxMessage;
 use App\IntegrationLayer\Outbox\Publishers\PublisherRouter;
 use App\IntegrationLayer\Ops\Metrics\MetricsLogger;
+use App\IntegrationLayer\Ops\Tracing\TraceLogger;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -26,7 +27,7 @@ class PublishOutboxMessage implements ShouldQueue
         $this->onQueue('outbox-publish');
     }
 
-    public function handle(PublisherRouter $router, MetricsLogger $metrics): void
+    public function handle(PublisherRouter $router, MetricsLogger $metrics, TraceLogger $tracing): void
     {
         $message = OutboxMessage::query()->find($this->outboxMessageId);
 
@@ -46,6 +47,12 @@ class PublishOutboxMessage implements ShouldQueue
         }
 
         $message->refresh();
+
+        $trace = $tracing->start('outbox.publish', [
+            'outbox_message_id' => $message->id,
+            'type' => $message->type,
+            'correlation_id' => $message->correlation_id,
+        ]);
 
         try {
             $router->resolve($message)->publish($message);
@@ -104,8 +111,11 @@ class PublishOutboxMessage implements ShouldQueue
                 'error' => $exception->getMessage(),
             ]);
 
+            $tracing->end($trace, ['result' => 'failed']);
             throw $exception;
         }
+
+        $tracing->end($trace, ['result' => 'sent']);
     }
 
     public function backoff(): array

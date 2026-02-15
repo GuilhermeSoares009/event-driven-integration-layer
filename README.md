@@ -106,6 +106,10 @@ Metrics logged via `metric` entries:
 - `webhook_rate_limited_total`
 - `webhook_circuit_open_total`
 
+Tracing (log-based) entries:
+- `trace.start`
+- `trace.end`
+
 ## Rate Limiting
 
 Rate limiting is applied per provider and IP.

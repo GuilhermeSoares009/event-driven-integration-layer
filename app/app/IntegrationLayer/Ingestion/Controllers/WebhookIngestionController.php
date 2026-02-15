@@ -8,6 +8,7 @@ use App\IntegrationLayer\Inbox\Jobs\ProcessInboxEvent;
 use App\IntegrationLayer\Inbox\Models\InboxEvent;
 use App\IntegrationLayer\Ingestion\CircuitBreaker\ProviderCircuitBreaker;
 use App\IntegrationLayer\Ops\Metrics\MetricsLogger;
+use App\IntegrationLayer\Ops\Tracing\TraceLogger;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,8 @@ class WebhookIngestionController
         private SignatureValidatorInterface $validator,
         private PayloadNormalizer $normalizer,
         private MetricsLogger $metrics,
-        private ProviderCircuitBreaker $circuitBreaker
+        private ProviderCircuitBreaker $circuitBreaker,
+        private TraceLogger $tracing
     ) {
     }
 
@@ -29,11 +31,18 @@ class WebhookIngestionController
         $payloadRaw = $request->getContent();
         $signature = $request->header('X-Signature');
 
+        $trace = $this->tracing->start('webhook.ingest', [
+            'provider' => $provider,
+            'topic' => $topic,
+            'correlation_id' => $request->header('X-Correlation-Id'),
+        ]);
+
         if ($this->circuitBreaker->isOpen($provider)) {
             $this->metrics->increment('webhook_circuit_open_total', 1, [
                 'provider' => $provider,
             ]);
 
+            $this->tracing->end($trace, ['result' => 'circuit_open']);
             return response()->json(['error' => 'circuit_open'], 503);
         }
 
@@ -45,6 +54,7 @@ class WebhookIngestionController
             ]);
 
             $this->circuitBreaker->recordFailure($provider);
+            $this->tracing->end($trace, ['result' => 'invalid_signature']);
             return response()->json(['error' => 'invalid_signature'], 401);
         }
 
@@ -65,6 +75,7 @@ class WebhookIngestionController
                 'provider' => $provider,
                 'topic' => $topic,
             ]);
+            $this->tracing->end($trace, ['result' => 'deduped']);
             return response()->json([
                 'status' => 'accepted',
                 'deduped' => true,
@@ -90,6 +101,7 @@ class WebhookIngestionController
                     'provider' => $provider,
                     'topic' => $topic,
                 ]);
+                $this->tracing->end($trace, ['result' => 'deduped']);
                 return response()->json([
                     'status' => 'accepted',
                     'deduped' => true,
@@ -116,6 +128,8 @@ class WebhookIngestionController
             'topic' => $topic,
             'correlation_id' => $correlationId,
         ]);
+
+        $this->tracing->end($trace, ['result' => 'accepted']);
 
         return response()->json([
             'status' => 'accepted',

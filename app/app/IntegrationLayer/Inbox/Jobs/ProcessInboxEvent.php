@@ -7,6 +7,7 @@ use App\IntegrationLayer\Inbox\Models\InboxEvent;
 use App\IntegrationLayer\Outbox\Jobs\PublishOutboxMessage;
 use App\IntegrationLayer\Outbox\Models\OutboxMessage;
 use App\IntegrationLayer\Ops\Metrics\MetricsLogger;
+use App\IntegrationLayer\Ops\Tracing\TraceLogger;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -39,7 +40,7 @@ class ProcessInboxEvent implements ShouldQueue
         return now()->addHours(6);
     }
 
-    public function handle(HandlerRouter $router, MetricsLogger $metrics): void
+    public function handle(HandlerRouter $router, MetricsLogger $metrics, TraceLogger $tracing): void
     {
         $event = InboxEvent::query()->find($this->inboxEventId);
 
@@ -59,6 +60,13 @@ class ProcessInboxEvent implements ShouldQueue
         }
 
         $event->refresh();
+
+        $trace = $tracing->start('inbox.process', [
+            'inbox_event_id' => $event->id,
+            'provider' => $event->provider,
+            'topic' => $event->topic,
+            'correlation_id' => $event->correlation_id,
+        ]);
 
         try {
             DB::transaction(function () use ($event, $router, $metrics) {
@@ -139,8 +147,11 @@ class ProcessInboxEvent implements ShouldQueue
                 'error' => $exception->getMessage(),
             ]);
 
+            $tracing->end($trace, ['result' => 'failed']);
             throw $exception;
         }
+
+        $tracing->end($trace, ['result' => 'processed']);
     }
 
     private function nextRetryDelay(int $attempt): int
