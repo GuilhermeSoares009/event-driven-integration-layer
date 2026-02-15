@@ -6,6 +6,7 @@ use App\IntegrationLayer\Ingestion\Normalizers\PayloadNormalizer;
 use App\IntegrationLayer\Ingestion\Validators\SignatureValidatorInterface;
 use App\IntegrationLayer\Inbox\Jobs\ProcessInboxEvent;
 use App\IntegrationLayer\Inbox\Models\InboxEvent;
+use App\IntegrationLayer\Ingestion\CircuitBreaker\ProviderCircuitBreaker;
 use App\IntegrationLayer\Ops\Metrics\MetricsLogger;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -18,7 +19,8 @@ class WebhookIngestionController
     public function __construct(
         private SignatureValidatorInterface $validator,
         private PayloadNormalizer $normalizer,
-        private MetricsLogger $metrics
+        private MetricsLogger $metrics,
+        private ProviderCircuitBreaker $circuitBreaker
     ) {
     }
 
@@ -27,12 +29,22 @@ class WebhookIngestionController
         $payloadRaw = $request->getContent();
         $signature = $request->header('X-Signature');
 
+        if ($this->circuitBreaker->isOpen($provider)) {
+            $this->metrics->increment('webhook_circuit_open_total', 1, [
+                'provider' => $provider,
+            ]);
+
+            return response()->json(['error' => 'circuit_open'], 503);
+        }
+
         if (!$this->validator->isValid($provider, $payloadRaw, $signature)) {
             Log::warning('webhook.invalid_signature', [
                 'provider' => $provider,
                 'topic' => $topic,
                 'correlation_id' => $request->header('X-Correlation-Id'),
             ]);
+
+            $this->circuitBreaker->recordFailure($provider);
             return response()->json(['error' => 'invalid_signature'], 401);
         }
 
@@ -95,6 +107,8 @@ class WebhookIngestionController
             'provider' => $provider,
             'topic' => $topic,
         ]);
+
+        $this->circuitBreaker->recordSuccess($provider);
 
         Log::info('webhook.received', [
             'inbox_event_id' => $event->id,

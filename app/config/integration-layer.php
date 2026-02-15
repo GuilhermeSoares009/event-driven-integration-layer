@@ -14,4 +14,8 @@ return [
         'inbox_days' => 30,
         'outbox_days' => 30,
     ],
+    'circuit_breaker' => [
+        'failure_threshold' => 5,
+        'open_seconds' => 120,
+    ],
 ];

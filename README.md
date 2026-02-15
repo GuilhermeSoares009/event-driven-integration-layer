@@ -104,6 +104,7 @@ Metrics logged via `metric` entries:
 - `outbox_failed_total`
 - `outbox_dead_total`
 - `webhook_rate_limited_total`
+- `webhook_circuit_open_total`
 
 ## Rate Limiting
 
@@ -113,6 +114,14 @@ Configure limits in `app/config/integration-layer.php`:
 
 - `rate_limits.default_per_minute`
 - `rate_limits.<provider>`
+
+## Circuit Breaker
+
+Circuit breaker per provider blocks ingestion when failures exceed threshold.
+
+Config in `app/config/integration-layer.php`:
+- `circuit_breaker.failure_threshold`
+- `circuit_breaker.open_seconds`
 
 ## Retention / Pruning
 
