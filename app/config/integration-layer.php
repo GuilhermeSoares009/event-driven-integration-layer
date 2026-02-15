@@ -10,4 +10,8 @@ return [
         'default_per_minute' => 60,
         // 'stripe' => 120,
     ],
+    'retention' => [
+        'inbox_days' => 30,
+        'outbox_days' => 30,
+    ],
 ];

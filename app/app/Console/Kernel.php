@@ -6,6 +6,8 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 use App\IntegrationLayer\Ops\Commands\ReplayInboxEvent;
 use App\IntegrationLayer\Ops\Commands\ReplayInboxBatch;
+use App\IntegrationLayer\Ops\Commands\PruneInboxEvents;
+use App\IntegrationLayer\Ops\Commands\PruneOutboxMessages;
 
 class Kernel extends ConsoleKernel
 {
@@ -31,5 +33,7 @@ class Kernel extends ConsoleKernel
     protected $commands = [
         ReplayInboxEvent::class,
         ReplayInboxBatch::class,
+        PruneInboxEvents::class,
+        PruneOutboxMessages::class,
     ];
 }

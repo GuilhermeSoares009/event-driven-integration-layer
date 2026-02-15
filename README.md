@@ -113,3 +113,12 @@ Configure limits in `app/config/integration-layer.php`:
 
 - `rate_limits.default_per_minute`
 - `rate_limits.<provider>`
+
+## Retention / Pruning
+
+Use the prune commands to delete old records:
+
+- `php artisan inbox:prune --days=30`
+- `php artisan outbox:prune --days=30`
+
+Defaults are in `app/config/integration-layer.php` under `retention`.
