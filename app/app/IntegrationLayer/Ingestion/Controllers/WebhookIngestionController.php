@@ -4,6 +4,7 @@ namespace App\IntegrationLayer\Ingestion\Controllers;
 
 use App\IntegrationLayer\Ingestion\Normalizers\PayloadNormalizer;
 use App\IntegrationLayer\Ingestion\Validators\SignatureValidatorInterface;
+use App\IntegrationLayer\Inbox\Jobs\ProcessInboxEvent;
 use App\IntegrationLayer\Inbox\Models\InboxEvent;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -68,6 +69,8 @@ class WebhookIngestionController
 
             throw $exception;
         }
+
+        ProcessInboxEvent::dispatch($event->id);
 
         return response()->json([
             'status' => 'accepted',
