@@ -1,0 +1,19 @@
+# Laravel (app/)
+app/.env
+app/.env.*
+app/vendor/
+app/node_modules/
+app/public/build/
+app/storage/*.key
+app/storage/logs/
+app/storage/framework/
+app/bootstrap/cache/
+app/.phpunit.result.cache
+app/coverage/
+app/storage/*.sqlite
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
