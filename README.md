@@ -7,7 +7,7 @@ Event-driven integration layer focused on webhook ingestion, idempotent processi
 - Primary backend target: Java 21 + Spring Boot 3
 -  / implementation remains in `app/` during transition
 - Local platform is fully dockerized for onboarding and reproducibility
-- release  delivers infrastructure and health endpoints; webhook flow transition is next
+- release  and M2 are complete (platform bootstrap + webhook ingestion parity)
 
 ## Target Architecture
 
@@ -16,6 +16,14 @@ Event-driven integration layer focused on webhook ingestion, idempotent processi
 3. Event is persisted in `inbox_events` with deduplication guarantees
 4. Async processing updates state and creates `outbox_messages`
 5. Outbox publisher performs reliable external publishing with retries and DLQ behavior
+
+Current implementation coverage:
+
+- Health endpoints (`/api/v1/health`, `/actuator/health`)
+- Webhook ingestion endpoint (`/api/v1/webhooks/{provider}/{topic}` and `/webhooks/{provider}/{topic}`)
+- Signature validation by provider secret
+- Deduplication by `provider + external_event_id` or `provider + payload_hash`
+- Inbox persistence with correlation ID
 
 ## Tech Stack
 
@@ -71,14 +79,27 @@ docker compose down
 - Redis: `localhost:6379`
 - Kafka: `localhost:9092`
 
+## Webhook Example
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/webhooks/test/orders" \
+  -H "Content-Type: application/json" \
+  -H "X-Signature: <hmac_sha256_hex>" \
+  -H "X-Correlation-Id: corr-123" \
+  -d '{"external_event_id":"evt_1","foo":"bar"}'
+```
+
 ## Service Environment Variables
 
 - `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
 - `REDIS_HOST`, `REDIS_PORT`
 - `KAFKA_BOOTSTRAP_SERVERS`
 - `SPRING_PROFILES_ACTIVE`
+- `WEBHOOK_PROVIDER_<PROVIDER>_SECRET`
 
 Defaults are provided for local Docker usage in `docker-compose.yml`.
+
+For local testing, the compose stack sets `WEBHOOK_PROVIDER_TEST_SECRET=test-secret` by default.
 
 You can also copy `service/.env.example` and adapt values for local execution.
 

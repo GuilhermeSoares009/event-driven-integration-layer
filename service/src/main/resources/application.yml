@@ -42,3 +42,6 @@ management:
 logging:
   level:
     root: INFO
+
+integration:
+  providers: {}
