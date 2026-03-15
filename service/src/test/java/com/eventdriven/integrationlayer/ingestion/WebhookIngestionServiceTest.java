@@ -30,6 +30,9 @@ class WebhookIngestionServiceTest {
     @Mock
     private InboxEventRepository inboxEventRepository;
 
+    @Mock
+    private ProviderCircuitBreaker circuitBreaker;
+
     private WebhookIngestionService webhookIngestionService;
 
     @BeforeEach
@@ -40,8 +43,28 @@ class WebhookIngestionServiceTest {
             signatureValidator,
             payloadNormalizer,
             inboxEventRepository,
-            objectMapper
+            objectMapper,
+            circuitBreaker
         );
+
+        when(circuitBreaker.isOpen(anyString())).thenReturn(false);
+    }
+
+    @Test
+    void shouldReturnCircuitOpenWhenProviderIsBlocked() {
+        when(circuitBreaker.isOpen("test")).thenReturn(true);
+
+        WebhookIngestionResponse result = webhookIngestionService.ingest(
+            "test",
+            "orders",
+            "{\"foo\":\"bar\"}",
+            "sig",
+            null
+        );
+
+        assertEquals(WebhookIngestionOutcome.CIRCUIT_OPEN, result.outcome());
+        verifyNoInteractions(signatureValidator);
+        verifyNoInteractions(inboxEventRepository);
     }
 
     @Test
@@ -59,6 +82,7 @@ class WebhookIngestionServiceTest {
         assertEquals(WebhookIngestionOutcome.INVALID_SIGNATURE, result.outcome());
         assertNull(result.correlationId());
         verifyNoInteractions(inboxEventRepository);
+        verify(circuitBreaker).recordFailure("test");
     }
 
     @Test
@@ -96,6 +120,7 @@ class WebhookIngestionServiceTest {
         assertEquals(WebhookIngestionOutcome.DEDUPED, result.outcome());
         assertNotNull(result.correlationId());
         verify(inboxEventRepository, never()).save(any(InboxEvent.class));
+        verify(circuitBreaker).recordSuccess("test");
     }
 
     @Test
@@ -116,6 +141,7 @@ class WebhookIngestionServiceTest {
 
         assertEquals(WebhookIngestionOutcome.DEDUPED, result.outcome());
         verify(inboxEventRepository, never()).save(any(InboxEvent.class));
+        verify(circuitBreaker).recordSuccess("test");
     }
 
     @Test
@@ -154,5 +180,6 @@ class WebhookIngestionServiceTest {
         assertEquals("corr-1", saved.getCorrelationId());
         assertNotNull(saved.getPayloadHash());
         assertNotNull(saved.getPayloadJson());
+        verify(circuitBreaker).recordSuccess("test");
     }
 }

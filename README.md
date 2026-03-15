@@ -7,7 +7,7 @@ Event-driven integration layer focused on webhook ingestion, idempotent processi
 - Primary backend target: Java 21 + Spring Boot 3
 -  / implementation remains in `app/` during transition
 - Local platform is fully dockerized for onboarding and reproducibility
-- release , M2, and M3 are complete (bootstrap + ingestion + async inbox/outbox workers)
+- release , M2, M3, and M4 are complete (bootstrap + ingestion + async workers + ops controls)
 
 ## Target Architecture
 
@@ -26,6 +26,8 @@ Current implementation coverage:
 - Inbox persistence with correlation ID
 - Scheduled inbox processing with retry/backoff and DLQ transition
 - Outbox publishing to Kafka with retry/backoff and DLQ transition
+- Provider/IP rate limiting and provider circuit breaker
+- Ops endpoints for replay and retention pruning
 
 ## Tech Stack
 
@@ -99,6 +101,13 @@ curl -X POST "http://localhost:8080/api/v1/webhooks/test/orders" \
 - Outbox publish failures move to `FAILED` with retry backoff and then `DEAD` after max attempts.
 - Retry schedule defaults to `30, 120, 300, 900, 1800` seconds plus jitter.
 
+## Ops Endpoints
+
+- `POST /api/v1/ops/inbox/{id}/replay`
+- `POST /api/v1/ops/inbox/replay-batch?provider=&topic=&limit=`
+- `DELETE /api/v1/ops/inbox/prune?days=`
+- `DELETE /api/v1/ops/outbox/prune?days=`
+
 ## Service Configuration
 
 - `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
@@ -106,6 +115,9 @@ curl -X POST "http://localhost:8080/api/v1/webhooks/test/orders" \
 - `KAFKA_BOOTSTRAP_SERVERS`
 - `SPRING_PROFILES_ACTIVE`
 - `WEBHOOK_PROVIDER_<PROVIDER>_SECRET`
+- `integration.rate-limits.*`
+- `integration.circuit-breaker.*`
+- `integration.retention.*`
 - `integration.processing.inbox.*` and `integration.processing.outbox.*`
 - `integration.outbox.kafka.topic-prefix`
 

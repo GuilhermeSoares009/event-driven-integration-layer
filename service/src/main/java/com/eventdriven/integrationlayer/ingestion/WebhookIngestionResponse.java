@@ -6,6 +6,10 @@ public record WebhookIngestionResponse(
     Long inboxEventId
 ) {
 
+    public static WebhookIngestionResponse circuitOpen() {
+        return new WebhookIngestionResponse(WebhookIngestionOutcome.CIRCUIT_OPEN, null, null);
+    }
+
     public static WebhookIngestionResponse accepted(String correlationId, Long inboxEventId) {
         return new WebhookIngestionResponse(WebhookIngestionOutcome.ACCEPTED, correlationId, inboxEventId);
     }

@@ -23,6 +23,30 @@ public interface InboxEventRepository extends JpaRepository<InboxEvent, Long> {
         Pageable pageable
     );
 
+    List<InboxEvent> findByStatusInOrderByReceivedAtAsc(List<String> statuses, Pageable pageable);
+
+    List<InboxEvent> findByStatusInAndProviderOrderByReceivedAtAsc(
+        List<String> statuses,
+        String provider,
+        Pageable pageable
+    );
+
+    List<InboxEvent> findByStatusInAndTopicOrderByReceivedAtAsc(
+        List<String> statuses,
+        String topic,
+        Pageable pageable
+    );
+
+    List<InboxEvent> findByStatusInAndProviderAndTopicOrderByReceivedAtAsc(
+        List<String> statuses,
+        String provider,
+        String topic,
+        Pageable pageable
+    );
+
+    @Transactional
+    long deleteByReceivedAtBefore(OffsetDateTime cutoff);
+
     @Modifying
     @Transactional
     @Query("update InboxEvent e set e.status = :toStatus where e.id = :id and e.status = :fromStatus")

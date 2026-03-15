@@ -27,17 +27,20 @@ public class WebhookIngestionService {
     private final PayloadNormalizer payloadNormalizer;
     private final InboxEventRepository inboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final ProviderCircuitBreaker circuitBreaker;
 
     public WebhookIngestionService(
         WebhookSignatureValidator signatureValidator,
         PayloadNormalizer payloadNormalizer,
         InboxEventRepository inboxEventRepository,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        ProviderCircuitBreaker circuitBreaker
     ) {
         this.signatureValidator = signatureValidator;
         this.payloadNormalizer = payloadNormalizer;
         this.inboxEventRepository = inboxEventRepository;
         this.objectMapper = objectMapper;
+        this.circuitBreaker = circuitBreaker;
     }
 
     public WebhookIngestionResponse ingest(
@@ -47,8 +50,13 @@ public class WebhookIngestionService {
         String signature,
         String providedCorrelationId
     ) {
+        if (circuitBreaker.isOpen(provider)) {
+            return WebhookIngestionResponse.circuitOpen();
+        }
+
         if (!signatureValidator.isValid(provider, payloadRaw, signature)) {
             log.warn("webhook.invalid_signature provider={} topic={}", provider, topic);
+            circuitBreaker.recordFailure(provider);
             return WebhookIngestionResponse.invalidSignature();
         }
 
@@ -63,6 +71,7 @@ public class WebhookIngestionService {
         String correlationId = resolveCorrelationId(providedCorrelationId);
 
         if (isDuplicate(provider, externalEventId, payloadHash)) {
+            circuitBreaker.recordSuccess(provider);
             return WebhookIngestionResponse.deduped(correlationId);
         }
 
@@ -78,8 +87,10 @@ public class WebhookIngestionService {
                 saved.getId()
             );
 
+            circuitBreaker.recordSuccess(provider);
             return WebhookIngestionResponse.accepted(correlationId, saved.getId());
         } catch (DataIntegrityViolationException exception) {
+            circuitBreaker.recordSuccess(provider);
             return WebhookIngestionResponse.deduped(correlationId);
         }
     }

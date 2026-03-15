@@ -19,6 +19,9 @@ public interface OutboxMessageRepository extends JpaRepository<OutboxMessage, Lo
         Pageable pageable
     );
 
+    @Transactional
+    long deleteByCreatedAtBefore(OffsetDateTime cutoff);
+
     @Modifying
     @Transactional
     @Query("update OutboxMessage m set m.status = :toStatus where m.id = :id and m.status = :fromStatus")

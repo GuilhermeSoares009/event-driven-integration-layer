@@ -47,6 +47,15 @@ logging:
 
 integration:
   providers: {}
+  rate-limits:
+    default-per-minute: 60
+    providers: {}
+  circuit-breaker:
+    failure-threshold: 5
+    open-seconds: 120
+  retention:
+    inbox-days: 30
+    outbox-days: 30
   processing:
     inbox:
       schedule-ms: 2000
