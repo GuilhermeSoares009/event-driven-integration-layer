@@ -22,6 +22,8 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      repositories:
+        enabled: false
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
@@ -45,3 +47,15 @@ logging:
 
 integration:
   providers: {}
+  processing:
+    inbox:
+      schedule-ms: 2000
+      batch-size: 50
+      max-attempts: 5
+    outbox:
+      schedule-ms: 2000
+      batch-size: 50
+      max-attempts: 5
+  outbox:
+    kafka:
+      topic-prefix: integration.outbox

@@ -7,7 +7,7 @@ Event-driven integration layer focused on webhook ingestion, idempotent processi
 - Primary backend target: Java 21 + Spring Boot 3
 -  / implementation remains in `app/` during transition
 - Local platform is fully dockerized for onboarding and reproducibility
-- release  and M2 are complete (platform bootstrap + webhook ingestion parity)
+- release , M2, and M3 are complete (bootstrap + ingestion + async inbox/outbox workers)
 
 ## Target Architecture
 
@@ -24,6 +24,8 @@ Current implementation coverage:
 - Signature validation by provider secret
 - Deduplication by `provider + external_event_id` or `provider + payload_hash`
 - Inbox persistence with correlation ID
+- Scheduled inbox processing with retry/backoff and DLQ transition
+- Outbox publishing to Kafka with retry/backoff and DLQ transition
 
 ## Tech Stack
 
@@ -89,13 +91,23 @@ curl -X POST "http://localhost:8080/api/v1/webhooks/test/orders" \
   -d '{"external_event_id":"evt_1","foo":"bar"}'
 ```
 
-## Service Environment Variables
+## Async Workers
+
+- Inbox worker transitions events through `RECEIVED -> PROCESSING -> PROCESSED`.
+- Inbox failures move to `FAILED` with retry backoff and then `DEAD` after max attempts.
+- Outbox worker transitions messages through `PENDING -> SENDING -> SENT`.
+- Outbox publish failures move to `FAILED` with retry backoff and then `DEAD` after max attempts.
+- Retry schedule defaults to `30, 120, 300, 900, 1800` seconds plus jitter.
+
+## Service Configuration
 
 - `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
 - `REDIS_HOST`, `REDIS_PORT`
 - `KAFKA_BOOTSTRAP_SERVERS`
 - `SPRING_PROFILES_ACTIVE`
 - `WEBHOOK_PROVIDER_<PROVIDER>_SECRET`
+- `integration.processing.inbox.*` and `integration.processing.outbox.*`
+- `integration.outbox.kafka.topic-prefix`
 
 Defaults are provided for local Docker usage in `docker-compose.yml`.
 

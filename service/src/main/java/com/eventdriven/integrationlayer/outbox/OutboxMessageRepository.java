@@ -1,4 +1,4 @@
-package com.eventdriven.integrationlayer.inbox;
+package com.eventdriven.integrationlayer.outbox;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -9,15 +9,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
-public interface InboxEventRepository extends JpaRepository<InboxEvent, Long> {
+public interface OutboxMessageRepository extends JpaRepository<OutboxMessage, Long> {
 
-    boolean existsByProviderAndExternalEventId(String provider, String externalEventId);
+    List<OutboxMessage> findByStatusOrderByCreatedAtAsc(String status, Pageable pageable);
 
-    boolean existsByProviderAndExternalEventIdIsNullAndPayloadHash(String provider, String payloadHash);
-
-    List<InboxEvent> findByStatusOrderByReceivedAtAsc(String status, Pageable pageable);
-
-    List<InboxEvent> findByStatusAndNextRetryAtLessThanEqualOrderByReceivedAtAsc(
+    List<OutboxMessage> findByStatusAndNextRetryAtLessThanEqualOrderByCreatedAtAsc(
         String status,
         OffsetDateTime nextRetryAt,
         Pageable pageable
@@ -25,6 +21,6 @@ public interface InboxEventRepository extends JpaRepository<InboxEvent, Long> {
 
     @Modifying
     @Transactional
-    @Query("update InboxEvent e set e.status = :toStatus where e.id = :id and e.status = :fromStatus")
+    @Query("update OutboxMessage m set m.status = :toStatus where m.id = :id and m.status = :fromStatus")
     int transitionStatus(@Param("id") Long id, @Param("fromStatus") String fromStatus, @Param("toStatus") String toStatus);
 }
